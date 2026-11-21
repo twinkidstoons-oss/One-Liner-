@@ -14,7 +14,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -23,8 +25,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -69,6 +73,11 @@ private data class SparkParticle(
     val radius: Float,
 )
 
+private data class TrailSample(
+    val pos: Offset,
+    val age: Float = 0f,
+)
+
 @Composable
 fun NeonPuzzleCanvas(
     level: PuzzleLevel,
@@ -88,7 +97,12 @@ fun NeonPuzzleCanvas(
     var pointerPos by remember(level.id, attemptNonce) { mutableStateOf<Offset?>(null) }
     var prevPointerPos by remember(level.id, attemptNonce) { mutableStateOf<Offset?>(null) }
 
-    val particles = remember { mutableStateListOf<SparkParticle>() }
+    val particles = remember(level.id) { mutableStateListOf<SparkParticle>() }
+    val dragTrail = remember(level.id, attemptNonce) { mutableStateListOf<TrailSample>() }
+    val edgeBloomNanos = remember(level.id, attemptNonce) { mutableStateMapOf<Int, Long>() }
+    var frameNowNanos by remember { mutableLongStateOf(0L) }
+    var prevDrawnSnapshot by remember(level.id, attemptNonce) { mutableStateOf<Set<Int>>(emptySet()) }
+
     val textMeasurer = rememberTextMeasurer()
 
     val infiniteTransition = rememberInfiniteTransition(label = "canvas_pulse")
@@ -101,6 +115,18 @@ fun NeonPuzzleCanvas(
         ),
         label = "node_pulse",
     )
+
+    // Record timestamp whenever a new edge becomes drawn so it plays a neon bloom sweep
+    LaunchedEffect(drawnEdgeIds, level.id, attemptNonce) {
+        val newlyAdded = drawnEdgeIds - prevDrawnSnapshot
+        if (newlyAdded.isNotEmpty()) {
+            val now = System.nanoTime()
+            newlyAdded.forEach { edgeId ->
+                edgeBloomNanos[edgeId] = now
+            }
+        }
+        prevDrawnSnapshot = drawnEdgeIds
+    }
 
     // Spawn celebration burst when level completes
     LaunchedEffect(status, level.id, attemptNonce) {
@@ -127,26 +153,41 @@ fun NeonPuzzleCanvas(
         }
     }
 
-    // Particle physics loop active only while particles exist
-    LaunchedEffect(particles.size) {
-        if (particles.isEmpty()) return@LaunchedEffect
+    // Frame animation loop active while particles, drag trail, or edge blooms are animating
+    val hasActiveEffects = particles.isNotEmpty() || dragTrail.isNotEmpty() || edgeBloomNanos.isNotEmpty()
+    LaunchedEffect(hasActiveEffects) {
+        if (!hasActiveEffects) return@LaunchedEffect
         var lastNanos = withFrameNanos { it }
-        while (particles.isNotEmpty()) {
+        while (particles.isNotEmpty() || dragTrail.isNotEmpty() || edgeBloomNanos.isNotEmpty()) {
             val now = withFrameNanos { it }
+            frameNowNanos = System.nanoTime()
             val dt = ((now - lastNanos) / 1_000_000_000f).coerceIn(0f, 0.05f)
             lastNanos = now
-            val iterator = particles.listIterator()
-            while (iterator.hasNext()) {
-                val p = iterator.next()
+
+            val pIter = particles.listIterator()
+            while (pIter.hasNext()) {
+                val p = pIter.next()
                 p.x += p.vx * dt
                 p.y += p.vy * dt
                 p.vx *= 0.94f
                 p.vy *= 0.94f
                 p.life -= dt / p.maxLife
                 if (p.life <= 0f) {
-                    iterator.remove()
+                    pIter.remove()
                 }
             }
+
+            for (i in dragTrail.lastIndex downTo 0) {
+                val updatedAge = dragTrail[i].age + dt * 4.2f
+                if (updatedAge >= 1f) {
+                    dragTrail.removeAt(i)
+                } else {
+                    dragTrail[i] = dragTrail[i].copy(age = updatedAge)
+                }
+            }
+
+            val expiredBlooms = edgeBloomNanos.filterValues { (frameNowNanos - it) > 320_000_000L }.keys.toList()
+            expiredBlooms.forEach { edgeBloomNanos.remove(it) }
         }
     }
 
@@ -182,7 +223,7 @@ fun NeonPuzzleCanvas(
         }
     }
 
-    // Track current state inside rememberUpdatedState-like refs for gesture loop
+    // Track latest Compose state for pointerInput gesture loop
     val currentStatusState = remember { mutableStateOf(status) }.apply { value = status }
     val currentVertexState = remember { mutableStateOf(currentVertexId) }.apply { value = currentVertexId }
     val currentDrawnState = remember { mutableStateOf(drawnEdgeIds) }.apply { value = drawnEdgeIds }
@@ -220,10 +261,12 @@ fun NeonPuzzleCanvas(
                     onBeginStroke(bestId)
                     pointerPos = down.position
                     prevPointerPos = down.position
+                    dragTrail.clear()
+                    dragTrail.add(TrailSample(down.position))
                     spawnNodeSparks(vertexScreenPos(bestId, canvasSize), NeonCyan, count = 10)
 
-                    var activePointerId = down.id
-                    var lastLeftVertexId: Int? = null
+                    val activePointerId = down.id
+                    var protectedPrevVertexId: Int? = null
 
                     while (true) {
                         val event = awaitPointerEvent(PointerEventPass.Main)
@@ -247,15 +290,25 @@ fun NeonPuzzleCanvas(
                         pointerPos = currPos
                         prevPointerPos = currPos
 
+                        if (dragTrail.isEmpty() || hypot(currPos.x - dragTrail.last().pos.x, currPos.y - dragTrail.last().pos.y) > 6f) {
+                            dragTrail.add(TrailSample(currPos))
+                            if (dragTrail.size > 18) {
+                                dragTrail.removeAt(0)
+                            }
+                        }
+
                         if (currentStatusState.value != PuzzleStatus.DRAWING) {
                             continue
                         }
 
                         val activeVertex = currentVertexState.value ?: continue
-                        val activePos = vertexScreenPos(activeVertex, canvasSize)
-                        val distFromActive = hypot(currPos.x - activePos.x, currPos.y - activePos.y)
-                        if (distFromActive > hitRadius * 0.55f) {
-                            lastLeftVertexId = activeVertex
+
+                        // Clear protection once finger moves away from the just-departed vertex
+                        protectedPrevVertexId?.let { prevV ->
+                            val prevVPos = vertexScreenPos(prevV, canvasSize)
+                            if (hypot(currPos.x - prevVPos.x, currPos.y - prevVPos.y) > hitRadius * 0.72f) {
+                                protectedPrevVertexId = null
+                            }
                         }
 
                         val drawn = currentDrawnState.value
@@ -278,15 +331,15 @@ fun NeonPuzzleCanvas(
                             val moved = onTryMoveTo(matchedValid)
                             if (moved) {
                                 spawnNodeSparks(vertexScreenPos(matchedValid, canvasSize), NeonEmerald, count = 14)
-                                lastLeftVertexId = activeVertex
+                                protectedPrevVertexId = activeVertex
                             }
                             continue
                         }
 
-                        // Check if user intentionally dragged straight into an already-drawn neighbor (retracing!)
-                        val retraceRadius = hitRadius * 0.48f
+                        // Check if user deliberately dragged onto an already-drawn neighbor (retracing!)
+                        val retraceRadius = hitRadius * 0.46f
                         for (v in level.vertices) {
-                            if (v.id == activeVertex || v.id == lastLeftVertexId) continue
+                            if (v.id == activeVertex || v.id == protectedPrevVertexId) continue
                             val alreadyDrawnEdge = EulerSolver.findDrawnEdgeBetween(level, activeVertex, v.id, drawn)
                             if (alreadyDrawnEdge != null) {
                                 val vPos = vertexScreenPos(v.id, canvasSize)
@@ -357,7 +410,7 @@ fun NeonPuzzleCanvas(
                 }
             }
 
-            // 3. Draw completed glowing edges (multi-pass neon bloom)
+            // 3. Draw completed glowing edges (multi-pass neon bloom + completion flash)
             for (edge in level.edges) {
                 if (!drawnEdgeIds.contains(edge.id)) continue
                 val start = posOf(edge.u)
@@ -366,11 +419,18 @@ fun NeonPuzzleCanvas(
                 val glowColor = if (isFlashingInvalid) NeonCoral else NeonEmerald
                 val coreColor = if (isFlashingInvalid) Color(0xFFFFB3C1) else Color(0xFFE0FFF6)
 
+                val bloomStart = edgeBloomNanos[edge.id]
+                val bloomProgress = if (bloomStart != null && frameNowNanos > bloomStart) {
+                    (1f - ((frameNowNanos - bloomStart) / 300_000_000f)).coerceIn(0f, 1f)
+                } else {
+                    0f
+                }
+
                 drawLine(
-                    color = glowColor.copy(alpha = 0.22f),
+                    color = glowColor.copy(alpha = 0.22f + 0.25f * bloomProgress),
                     start = start,
                     end = end,
-                    strokeWidth = 28f,
+                    strokeWidth = 28f + 16f * bloomProgress,
                     cap = StrokeCap.Round,
                 )
                 drawLine(
@@ -381,51 +441,116 @@ fun NeonPuzzleCanvas(
                     ),
                     start = start,
                     end = end,
-                    strokeWidth = 12f,
+                    strokeWidth = 12f + 3f * bloomProgress,
                     cap = StrokeCap.Round,
                 )
                 drawLine(
                     color = coreColor,
                     start = start,
                     end = end,
-                    strokeWidth = 4.5f,
+                    strokeWidth = 4.5f + 1.5f * bloomProgress,
                     cap = StrokeCap.Round,
                 )
             }
 
-            // 4. Active tether from current vertex to finger/mouse
+            // 4. Smooth fading finger ribbon trail
+            if (dragTrail.size > 1) {
+                val trailPath = Path()
+                trailPath.moveTo(dragTrail.first().pos.x, dragTrail.first().pos.y)
+                for (i in 1 until dragTrail.size) {
+                    val prev = dragTrail[i - 1].pos
+                    val curr = dragTrail[i].pos
+                    val mid = Offset((prev.x + curr.x) / 2f, (prev.y + curr.y) / 2f)
+                    trailPath.quadraticTo(prev.x, prev.y, mid.x, mid.y)
+                }
+                trailPath.lineTo(dragTrail.last().pos.x, dragTrail.last().pos.y)
+                val headAlpha = (1f - dragTrail.last().age).coerceIn(0f, 1f)
+                drawPath(
+                    path = trailPath,
+                    color = NeonCyan.copy(alpha = 0.26f * headAlpha),
+                    style = Stroke(width = 16f, cap = StrokeCap.Round, join = StrokeJoin.Round),
+                )
+                drawPath(
+                    path = trailPath,
+                    color = Color.White.copy(alpha = 0.45f * headAlpha),
+                    style = Stroke(width = 4f, cap = StrokeCap.Round, join = StrokeJoin.Round),
+                )
+            }
+
+            // 5. Active tether from current vertex to finger/mouse with magnetic snap & retrace warning
             val activePos = currentVertexId?.let { posOf(it) }
             val cursor = pointerPos
+            var magneticSnapVertexId: Int? = null
             if (status == PuzzleStatus.DRAWING && activePos != null && cursor != null && currentVertexId != null) {
                 val validNext = EulerSolver.validNextVertices(level, currentVertexId, drawnEdgeIds)
-                // Check if cursor is hovering near a valid neighbor for magnetic glow feedback
-                val nearValid = validNext.any { vId ->
+                val snapPreviewRadius = boardSize * 0.145f
+                var nearestValidDist = Float.MAX_VALUE
+                for (vId in validNext) {
                     val vp = posOf(vId)
-                    hypot(cursor.x - vp.x, cursor.y - vp.y) < boardSize * 0.14f
+                    val d = hypot(cursor.x - vp.x, cursor.y - vp.y)
+                    if (d < snapPreviewRadius && d < nearestValidDist) {
+                        nearestValidDist = d
+                        magneticSnapVertexId = vId
+                    }
                 }
-                val tetherColor = if (nearValid) NeonEmerald else NeonCyan
+
+                // Detect if cursor is hovering directly over an already-drawn neighbor (retrace warning)
+                val nearRetraceTarget = level.vertices.any { v ->
+                    if (v.id == currentVertexId || v.id in validNext) return@any false
+                    val drawnBetween = EulerSolver.findDrawnEdgeBetween(level, currentVertexId, v.id, drawnEdgeIds)
+                    if (drawnBetween != null) {
+                        val vp = posOf(v.id)
+                        hypot(cursor.x - vp.x, cursor.y - vp.y) < boardSize * 0.12f
+                    } else {
+                        false
+                    }
+                }
+
+                val tetherColor = when {
+                    magneticSnapVertexId != null -> NeonEmerald
+                    nearRetraceTarget -> NeonCoral
+                    else -> NeonCyan
+                }
+
+                val tetherEnd = magneticSnapVertexId?.let { posOf(it) } ?: cursor
                 drawLine(
-                    color = tetherColor.copy(alpha = 0.25f),
+                    color = tetherColor.copy(alpha = 0.26f),
                     start = activePos,
-                    end = cursor,
-                    strokeWidth = 18f,
+                    end = tetherEnd,
+                    strokeWidth = 20f,
                     cap = StrokeCap.Round,
                 )
                 drawLine(
-                    color = tetherColor.copy(alpha = 0.85f),
+                    brush = Brush.linearGradient(
+                        colors = listOf(NeonCyan, tetherColor),
+                        start = activePos,
+                        end = tetherEnd,
+                    ),
                     start = activePos,
-                    end = cursor,
-                    strokeWidth = 7f,
+                    end = tetherEnd,
+                    strokeWidth = 8f,
+                    cap = StrokeCap.Round,
+                )
+                drawLine(
+                    color = Color.White.copy(alpha = 0.85f),
+                    start = activePos,
+                    end = tetherEnd,
+                    strokeWidth = 2.5f,
                     cap = StrokeCap.Round,
                 )
                 drawCircle(
-                    color = tetherColor.copy(alpha = 0.35f),
-                    radius = 18f,
+                    color = tetherColor.copy(alpha = 0.28f),
+                    radius = 24f,
+                    center = cursor,
+                )
+                drawCircle(
+                    color = tetherColor.copy(alpha = 0.85f),
+                    radius = 10f,
                     center = cursor,
                 )
             }
 
-            // 5. Draw vertices/nodes
+            // 6. Draw vertices/nodes
             val nodeRadius = (boardSize * 0.036f).coerceIn(14f, 24f)
             val validTargets = if (status == PuzzleStatus.DRAWING && currentVertexId != null) {
                 EulerSolver.validNextVertices(level, currentVertexId, drawnEdgeIds)
@@ -436,15 +561,27 @@ fun NeonPuzzleCanvas(
             for (v in level.vertices) {
                 val center = posOf(v.id)
                 val isCurrent = v.id == currentVertexId
+                val isMagneticTarget = v.id == magneticSnapVertexId
                 val isValidTarget = v.id in validTargets
                 val isOddSuggestedStart = status == PuzzleStatus.READY && oddVertices.contains(v.id)
 
-                // Outer halo for active, valid target, or odd-degree start clue
                 if (isCurrent) {
                     drawCircle(
                         color = NeonCyan.copy(alpha = 0.35f * pulse),
                         radius = nodeRadius * 1.9f,
                         center = center,
+                    )
+                } else if (isMagneticTarget) {
+                    drawCircle(
+                        color = NeonEmerald.copy(alpha = 0.42f),
+                        radius = nodeRadius * 2.1f,
+                        center = center,
+                    )
+                    drawCircle(
+                        color = NeonEmerald,
+                        radius = nodeRadius * 1.65f,
+                        center = center,
+                        style = Stroke(width = 3f),
                     )
                 } else if (isValidTarget) {
                     drawCircle(
@@ -463,35 +600,41 @@ fun NeonPuzzleCanvas(
 
                 val fillColor = when {
                     isCurrent -> NeonCyan
+                    isMagneticTarget -> NeonEmerald
                     isValidTarget -> NeonSurfaceHighlight(NeonEmerald)
                     else -> VertexIdle
                 }
                 val borderColor = when {
                     isCurrent -> Color.White
-                    isValidTarget -> NeonEmerald
+                    isValidTarget || isMagneticTarget -> NeonEmerald
                     isOddSuggestedStart -> NeonViolet
                     else -> VertexBorderIdle
                 }
 
+                val drawR = when {
+                    isCurrent || isMagneticTarget -> nodeRadius * 1.18f
+                    else -> nodeRadius
+                }
+
                 drawCircle(
                     color = fillColor,
-                    radius = if (isCurrent) nodeRadius * 1.15f else nodeRadius,
+                    radius = drawR,
                     center = center,
                 )
                 drawCircle(
                     color = borderColor,
-                    radius = if (isCurrent) nodeRadius * 1.15f else nodeRadius,
+                    radius = drawR,
                     center = center,
                     style = Stroke(width = 4f),
                 )
                 drawCircle(
-                    color = Color.White.copy(alpha = if (isCurrent) 0.95f else 0.35f),
+                    color = Color.White.copy(alpha = if (isCurrent || isMagneticTarget) 0.95f else 0.35f),
                     radius = nodeRadius * 0.32f,
                     center = center,
                 )
             }
 
-            // 6. Draw Hint Step Numbers on vertices when Hint is active
+            // 7. Draw Hint Step Numbers on vertices when Hint is active
             if (revealedHintSteps > 0 && hintPath.isNotEmpty()) {
                 drawHintBadges(
                     hintPath = hintPath,
@@ -502,7 +645,7 @@ fun NeonPuzzleCanvas(
                 )
             }
 
-            // 7. Draw particle sparks
+            // 8. Draw particle sparks
             for (p in particles) {
                 drawCircle(
                     color = p.color.copy(alpha = p.life.coerceIn(0f, 1f)),
@@ -529,7 +672,6 @@ private fun DrawScope.drawHintBadges(
     nodeRadius: Float,
     textMeasurer: TextMeasurer,
 ) {
-    // Show first few step indices clearly without overcrowding: show step #1 on start node and up to next 4 nodes
     val shownCount = (revealedSteps + 1).coerceAtMost(hintPath.size)
     val firstVisitStep = LinkedHashMap<Int, Int>()
     for (stepIdx in 0 until shownCount) {
