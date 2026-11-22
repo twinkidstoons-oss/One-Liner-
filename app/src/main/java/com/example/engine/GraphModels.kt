@@ -6,7 +6,12 @@ enum class DifficultyTier(val index: Int) {
     GEOMETRY(2),
     OVERLAPS(3),
     MASTERMIND(4),
-    DAILY(5),
+    ICONIC(5),
+    ARTIFACTS(6),
+    NATURE(7),
+    WONDER(8),
+    SACRED(9),
+    DAILY(10),
 }
 
 data class Vertex(

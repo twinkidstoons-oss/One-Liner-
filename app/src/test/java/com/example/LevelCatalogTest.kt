@@ -12,15 +12,15 @@ import kotlin.math.hypot
 class LevelCatalogTest {
 
     @Test
-    fun all50LevelsExistAndAreUnique() {
+    fun all100LevelsExistAndAreUnique() {
         val levels = LevelCatalog.levels
-        assertEquals("Must have exactly 50 levels", 50, levels.size)
-        assertEquals((1..50).toList(), levels.map { it.id })
-        assertEquals(50, levels.map { it.name }.toSet().size)
+        assertEquals("Must have exactly 100 levels", 100, levels.size)
+        assertEquals((1..100).toList(), levels.map { it.id })
+        assertEquals(100, levels.map { it.name }.toSet().size)
     }
 
     @Test
-    fun all50LevelsHaveValidEulerianSolutionsAndCleanGeometry() {
+    fun all100LevelsHaveValidEulerianSolutionsAndCleanGeometry() {
         val errors = mutableListOf<String>()
         for (level in LevelCatalog.levels) {
             if (level.vertices.isEmpty() || level.edges.isEmpty()) {

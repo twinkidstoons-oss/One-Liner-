@@ -13,6 +13,11 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import org.json.JSONArray
 import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
+import java.util.TimeZone
+import java.util.concurrent.TimeUnit
 
 private val Context.gameDataStore: DataStore<Preferences> by preferencesDataStore(name = "one_line_progress")
 
@@ -43,6 +48,84 @@ data class GameProgress(
     val completedLevelsCount: Int get() = levelStars.size
     val totalStars: Int get() = levelStars.values.sum()
     val threeStarCount: Int get() = levelStars.values.count { it >= 3 }
+
+    fun currentDailyStreak(todayKey: String, yesterdayKey: String): Int =
+        DailyStreakHelper.computeCurrentStreak(completedDailyDates, todayKey, yesterdayKey)
+
+    fun bestDailyStreak(): Int =
+        DailyStreakHelper.computeBestStreak(completedDailyDates)
+}
+
+object DailyStreakHelper {
+    private val utcTz: TimeZone = TimeZone.getTimeZone("UTC")
+
+    private fun parseEpochDay(dateKey: String): Long? {
+        if (dateKey.length != 10) return null
+        return try {
+            val fmt = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+                timeZone = utcTz
+                isLenient = false
+            }
+            val parsed = fmt.parse(dateKey) ?: return null
+            TimeUnit.MILLISECONDS.toDays(parsed.time)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    fun computeCurrentStreak(
+        completedDates: Set<String>,
+        todayKey: String,
+        yesterdayKey: String,
+    ): Int {
+        if (completedDates.isEmpty()) return 0
+        val completedDays = completedDates.mapNotNull(::parseEpochDay).toHashSet()
+        val anchorDay = when {
+            completedDates.contains(todayKey) -> parseEpochDay(todayKey)
+            completedDates.contains(yesterdayKey) -> parseEpochDay(yesterdayKey)
+            else -> null
+        } ?: return 0
+
+        var streak = 0
+        var cursor = anchorDay
+        while (completedDays.contains(cursor)) {
+            streak++
+            cursor--
+        }
+        return streak
+    }
+
+    fun computeStreakEndingAt(
+        completedDates: Set<String>,
+        endDateKey: String,
+    ): Int {
+        val endDay = parseEpochDay(endDateKey) ?: return 0
+        val completedDays = completedDates.mapNotNull(::parseEpochDay).toHashSet()
+        var streak = 0
+        var cursor = endDay
+        while (completedDays.contains(cursor)) {
+            streak++
+            cursor--
+        }
+        return streak
+    }
+
+    fun computeBestStreak(completedDates: Set<String>): Int {
+        if (completedDates.isEmpty()) return 0
+        val sortedDays = completedDates.mapNotNull(::parseEpochDay).distinct().sorted()
+        if (sortedDays.isEmpty()) return 0
+        var best = 1
+        var current = 1
+        for (i in 1 until sortedDays.size) {
+            if (sortedDays[i] == sortedDays[i - 1] + 1L) {
+                current++
+                if (current > best) best = current
+            } else {
+                current = 1
+            }
+        }
+        return best
+    }
 }
 
 class GameProgressRepository(private val context: Context) {
@@ -70,14 +153,20 @@ class GameProgressRepository(private val context: Context) {
     }
 
     val progressFlow: Flow<GameProgress> = context.gameDataStore.data.map { prefs ->
+        val completedDailyDates = parseStringSet(prefs[Keys.DAILY_DATES_JSON])
+        val todayKey = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Calendar.getInstance().time)
+        val yesterdayCal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }
+        val yesterdayKey = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(yesterdayCal.time)
+        val computedStreak = DailyStreakHelper.computeCurrentStreak(completedDailyDates, todayKey, yesterdayKey)
+
         GameProgress(
             onboardingCompleted = prefs[Keys.ONBOARDING_DONE] ?: false,
             coins = prefs[Keys.COINS] ?: 50,
-            highestUnlockedLevel = (prefs[Keys.HIGHEST_UNLOCKED] ?: 1).coerceIn(1, 50),
+            highestUnlockedLevel = (prefs[Keys.HIGHEST_UNLOCKED] ?: 1).coerceIn(1, 100),
             levelStars = parseIntMap(prefs[Keys.LEVEL_STARS_JSON]),
             levelBestScores = parseIntMap(prefs[Keys.LEVEL_SCORES_JSON]),
-            completedDailyDates = parseStringSet(prefs[Keys.DAILY_DATES_JSON]),
-            dailyStreak = prefs[Keys.DAILY_STREAK] ?: 0,
+            completedDailyDates = completedDailyDates,
+            dailyStreak = computedStreak,
             lastDailyDate = prefs[Keys.LAST_DAILY_DATE] ?: "",
             totalAttempts = prefs[Keys.TOTAL_ATTEMPTS] ?: 0,
             totalClears = prefs[Keys.TOTAL_CLEARS] ?: 0,
@@ -137,7 +226,7 @@ class GameProgressRepository(private val context: Context) {
             prefs[Keys.LEVEL_SCORES_JSON] = encodeIntMap(scoresMap)
 
             val prevUnlocked = prefs[Keys.HIGHEST_UNLOCKED] ?: 1
-            if (levelId >= prevUnlocked && levelId < 50) {
+            if (levelId >= prevUnlocked && levelId < 100) {
                 prefs[Keys.HIGHEST_UNLOCKED] = levelId + 1
             }
 
@@ -165,15 +254,11 @@ class GameProgressRepository(private val context: Context) {
     ) {
         context.gameDataStore.edit { prefs ->
             val dates = parseStringSet(prefs[Keys.DAILY_DATES_JSON]).toMutableSet()
-            val isFirstTimeToday = dates.add(dateKey)
+            dates.add(dateKey)
             prefs[Keys.DAILY_DATES_JSON] = encodeStringSet(dates)
 
-            if (isFirstTimeToday) {
-                val lastDate = prefs[Keys.LAST_DAILY_DATE] ?: ""
-                val prevStreak = prefs[Keys.DAILY_STREAK] ?: 0
-                prefs[Keys.DAILY_STREAK] = if (lastDate == yesterdayKey) prevStreak + 1 else 1
-                prefs[Keys.LAST_DAILY_DATE] = dateKey
-            }
+            prefs[Keys.DAILY_STREAK] = DailyStreakHelper.computeStreakEndingAt(dates, dateKey)
+            prefs[Keys.LAST_DAILY_DATE] = dateKey
 
             prefs[Keys.COINS] = (prefs[Keys.COINS] ?: 50) + coinsEarned + achievementBonusCoins
             prefs[Keys.TOTAL_CLEARS] = (prefs[Keys.TOTAL_CLEARS] ?: 0) + 1

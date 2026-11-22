@@ -83,6 +83,11 @@ data class AppStrings(
     val tierGeometry: String,
     val tierOverlaps: String,
     val tierMastermind: String,
+    val tierIconic: String,
+    val tierArtifacts: String,
+    val tierNature: String,
+    val tierWonder: String,
+    val tierSacred: String,
     val tierDaily: String,
     val lockedLevel: String,
     val rule1Title: String,
@@ -119,7 +124,7 @@ private val EnglishStrings = AppStrings(
     onboardingTitle2 = "Never Retrace a Line",
     onboardingBody2 = "Each line can only be drawn once. Plan your path ahead so you don't get trapped at a dead end!",
     onboardingTitle3 = "Stars, Coins & Daily Puzzles",
-    onboardingBody3 = "Solve cleanly for 3 stars, earn coins for smart hints, unlock 50 geometric levels, and beat Daily Challenges.",
+    onboardingBody3 = "Solve cleanly for 3 stars, earn coins for smart hints, unlock 100 geometric levels, and beat Daily Challenges.",
     onboardingTryIt = "Try it here! Connect all 3 lines:",
     onboardingSolved = "Awesome! Single stroke mastered!",
     play = "PLAY",
@@ -175,6 +180,11 @@ private val EnglishStrings = AppStrings(
     tierGeometry = "Geometry",
     tierOverlaps = "Overlaps",
     tierMastermind = "Mastermind",
+    tierIconic = "Iconic",
+    tierArtifacts = "Artifacts",
+    tierNature = "Nature",
+    tierWonder = "Wonder",
+    tierSacred = "Sacred",
     tierDaily = "Daily",
     lockedLevel = "Complete previous level to unlock",
     rule1Title = "1. One Single Line",
@@ -186,7 +196,7 @@ private val EnglishStrings = AppStrings(
     rule4Title = "4. Pro Strategy: Odd Nodes",
     rule4Desc = "Count lines meeting at each node. If a shape has two nodes with an odd number of lines, you MUST start at one and end at the other!",
     startDrawingPrompt = "Touch any node & drag without lifting",
-    hintActivePrompt = "Follow the numbered glowing nodes!",
+    hintActivePrompt = "Start at START and follow edges 1, 2, 3...",
 )
 
 private val SpanishStrings = EnglishStrings.copy(
@@ -200,7 +210,7 @@ private val SpanishStrings = EnglishStrings.copy(
     onboardingTitle2 = "Nunca Repitas una Línea",
     onboardingBody2 = "Cada línea solo se puede dibujar una vez. ¡Planifica tu ruta para no quedar atrapado!",
     onboardingTitle3 = "Estrellas, Monedas y Reto Diario",
-    onboardingBody3 = "Resuelve limpio para ganar 3 estrellas, consigue monedas para pistas y supera 50 niveles.",
+    onboardingBody3 = "Resuelve limpio para ganar 3 estrellas, consigue monedas para pistas y supera 100 niveles.",
     onboardingTryIt = "¡Pruébalo aquí! Conecta las 3 líneas:",
     onboardingSolved = "¡Genial! ¡Dominaste el trazo!",
     play = "JUGAR",
@@ -251,7 +261,7 @@ private val SpanishStrings = EnglishStrings.copy(
     completedToday = "¡Completado Hoy! Jugar de Nuevo",
     notEnoughCoins = "¡Necesitas 25 monedas para una pista!",
     startDrawingPrompt = "Toca un nodo y arrastra sin soltar",
-    hintActivePrompt = "¡Sigue los nodos numerados!",
+    hintActivePrompt = "¡Empieza en START y sigue 1, 2, 3...",
 )
 
 private val FrenchStrings = EnglishStrings.copy(
@@ -265,7 +275,7 @@ private val FrenchStrings = EnglishStrings.copy(
     onboardingTitle2 = "Ne Repassez Jamais",
     onboardingBody2 = "Chaque ligne ne peut être tracée qu'une seule fois. Anticipez votre parcours !",
     onboardingTitle3 = "Étoiles, Pièces & Défis",
-    onboardingBody3 = "Gagnez 3 étoiles, utilisez des indices et relevez 50 niveaux géométriques.",
+    onboardingBody3 = "Gagnez 3 étoiles, utilisez des indices et relevez 100 niveaux géométriques.",
     onboardingTryIt = "Essayez ici ! Reliez les 3 lignes :",
     onboardingSolved = "Bravo ! Trait unique maîtrisé !",
     play = "JOUER",
@@ -312,7 +322,7 @@ private val FrenchStrings = EnglishStrings.copy(
     completedToday = "Terminé Aujourd'hui ! Rejouer",
     notEnoughCoins = "25 pièces requises pour un indice !",
     startDrawingPrompt = "Glissez d'un point à l'autre sans lâcher",
-    hintActivePrompt = "Suivez les points numérotés !",
+    hintActivePrompt = "Partez de START et suivez 1, 2, 3...",
 )
 
 private val GermanStrings = EnglishStrings.copy(
@@ -326,7 +336,7 @@ private val GermanStrings = EnglishStrings.copy(
     onboardingTitle2 = "Keine Linie Doppelt",
     onboardingBody2 = "Jede Linie darf nur einmal gezeichnet werden. Plane deinen Weg klug!",
     onboardingTitle3 = "Sterne, Münzen & Tagesrätsel",
-    onboardingBody3 = "Sammle 3 Sterne, nutze Hinweise und meistere alle 50 Level.",
+    onboardingBody3 = "Sammle 3 Sterne, nutze Hinweise und meistere alle 100 Level.",
     onboardingTryIt = "Teste es hier! Verbinde alle 3 Linien:",
     onboardingSolved = "Stark! Ein-Linien-Zug gemeistert!",
     play = "SPIELEN",
@@ -373,7 +383,7 @@ private val GermanStrings = EnglishStrings.copy(
     completedToday = "Heute gelöst! Nochmal spielen",
     notEnoughCoins = "25 Münzen für einen Hinweis nötig!",
     startDrawingPrompt = "Ziehe ohne Absetzen über alle Linien",
-    hintActivePrompt = "Folge den nummerierten Punkten!",
+    hintActivePrompt = "Starte bei START und folge 1, 2, 3...",
 )
 
 private val HindiStrings = EnglishStrings.copy(
@@ -387,7 +397,7 @@ private val HindiStrings = EnglishStrings.copy(
     onboardingTitle2 = "रेखा दोहराएं नहीं",
     onboardingBody2 = "हर रेखा को केवल एक बार ही खींचा जा सकता है। आगे की चाल पहले सोचें!",
     onboardingTitle3 = "सितारे, सिक्के और दैनिक चुनौती",
-    onboardingBody3 = "3 सितारे पाएं, हिंट के लिए सिक्के कमाएं और 50 लेवल पूरे करें।",
+    onboardingBody3 = "3 सितारे पाएं, हिंट के लिए सिक्के कमाएं और 100 लेवल पूरे करें।",
     onboardingTryIt = "यहाँ आज़माएं! तीनों रेखाएं जोड़ें:",
     onboardingSolved = "शानदार! आपने एक स्ट्रोक में हल किया!",
     play = "खेलें",
@@ -434,5 +444,5 @@ private val HindiStrings = EnglishStrings.copy(
     completedToday = "आज पूरा हुआ! फिर से खेलें",
     notEnoughCoins = "हिंट के लिए 25 सिक्के चाहिए!",
     startDrawingPrompt = "बिना उंगली उठाए सभी रेखाएं खींचें",
-    hintActivePrompt = "चमकते नंबर वाले बिंदुओं का पालन करें!",
+    hintActivePrompt = "START से शुरू करें और 1, 2, 3... क्रम का पालन करें!",
 )

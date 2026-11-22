@@ -75,6 +75,11 @@ fun LevelSelectScreen(
         DifficultyTier.GEOMETRY,
         DifficultyTier.OVERLAPS,
         DifficultyTier.MASTERMIND,
+        DifficultyTier.ICONIC,
+        DifficultyTier.ARTIFACTS,
+        DifficultyTier.NATURE,
+        DifficultyTier.WONDER,
+        DifficultyTier.SACRED,
     )
     var selectedTier by remember { mutableStateOf<DifficultyTier?>(null) }
 
@@ -109,7 +114,7 @@ fun LevelSelectScreen(
                             )
                             Spacer(modifier = Modifier.width(5.dp))
                             Text(
-                                text = "${progress.totalStars} / 150",
+                                text = "${progress.totalStars} / 300",
                                 style = MaterialTheme.typography.labelLarge,
                                 color = NeonAmber,
                             )
@@ -127,7 +132,7 @@ fun LevelSelectScreen(
                     FilterChip(
                         selected = selectedTier == null,
                         onClick = { selectedTier = null },
-                        label = { Text("All (50)") },
+                        label = { Text("All (100)") },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = NeonCyan.copy(alpha = 0.2f),
                             selectedLabelColor = NeonCyan,
@@ -142,6 +147,11 @@ fun LevelSelectScreen(
                         DifficultyTier.GEOMETRY -> "21-30"
                         DifficultyTier.OVERLAPS -> "31-40"
                         DifficultyTier.MASTERMIND -> "41-50"
+                        DifficultyTier.ICONIC -> "51-60"
+                        DifficultyTier.ARTIFACTS -> "61-70"
+                        DifficultyTier.NATURE -> "71-80"
+                        DifficultyTier.WONDER -> "81-90"
+                        DifficultyTier.SACRED -> "91-100"
                         DifficultyTier.DAILY -> ""
                     }
                     FilterChip(

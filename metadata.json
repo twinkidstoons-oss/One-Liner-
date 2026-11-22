@@ -1,6 +1,6 @@
 {
   "name": "One Line",
-  "description": "A neon brain puzzle game where you complete 50 handcrafted geometric puzzles and daily challenges in one continuous stroke.",
+  "description": "A neon brain puzzle game where you complete 100 handcrafted geometric puzzles and daily challenges in one continuous stroke.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

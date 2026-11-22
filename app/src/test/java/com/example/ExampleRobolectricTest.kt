@@ -77,4 +77,41 @@ class ExampleRobolectricTest {
         assertTrue((vm.progress.value.levelStars[1] ?: 0) in 1..3)
         assertTrue(vm.progress.value.highestUnlockedLevel >= 2)
     }
+
+    @Test
+    fun dailyStreakCalculatesAccuratelyAndResetsWhenExpired() {
+        val datesConsecutiveUpToToday = setOf("2026-11-18", "2026-11-19", "2026-11-20", "2026-11-21")
+        assertEquals(
+            4,
+            com.example.data.DailyStreakHelper.computeCurrentStreak(
+                completedDates = datesConsecutiveUpToToday,
+                todayKey = "2026-11-21",
+                yesterdayKey = "2026-11-20",
+            ),
+        )
+
+        val datesUpToYesterday = setOf("2026-11-18", "2026-11-19", "2026-11-20")
+        assertEquals(
+            3,
+            com.example.data.DailyStreakHelper.computeCurrentStreak(
+                completedDates = datesUpToYesterday,
+                todayKey = "2026-11-21",
+                yesterdayKey = "2026-11-20",
+            ),
+        )
+
+        val staleDatesMissedYesterday = setOf("2026-11-17", "2026-11-18", "2026-11-19")
+        assertEquals(
+            0,
+            com.example.data.DailyStreakHelper.computeCurrentStreak(
+                completedDates = staleDatesMissedYesterday,
+                todayKey = "2026-11-21",
+                yesterdayKey = "2026-11-20",
+            ),
+        )
+        assertEquals(
+            3,
+            com.example.data.DailyStreakHelper.computeBestStreak(staleDatesMissedYesterday),
+        )
+    }
 }

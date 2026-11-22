@@ -66,6 +66,10 @@ fun DailyChallengeScreen(
     BackHandler(onBack = onBack)
     val strings = LocalAppStrings.current
     val todayKey = remember { GameViewModel.todayDateKey() }
+    val yesterdayKey = remember { GameViewModel.yesterdayDateKey() }
+    val liveStreak = remember(progress.completedDailyDates, todayKey, yesterdayKey) {
+        progress.currentDailyStreak(todayKey, yesterdayKey)
+    }
     val last7Days = remember { GameViewModel.recent7DateKeys() }
     val todaysPuzzle = remember(todayKey) { LevelCatalog.generateDailyPuzzle(todayKey) }
     val isCompletedToday = progress.completedDailyDates.contains(todayKey)
@@ -111,7 +115,7 @@ fun DailyChallengeScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "${progress.dailyStreak} ${strings.streakDays}",
+                                    text = "$liveStreak ${strings.streakDays}",
                                     style = MaterialTheme.typography.titleLarge,
                                     color = NeonAmber,
                                 )

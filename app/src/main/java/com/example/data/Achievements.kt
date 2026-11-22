@@ -30,17 +30,17 @@ object Achievements {
         AchievementDef(
             id = "halfway_hero",
             title = "Halfway Architect",
-            description = "Complete 25 puzzle levels",
-            target = 25,
-            coinReward = 100,
+            description = "Complete 50 puzzle levels",
+            target = 50,
+            coinReward = 150,
             progressSelector = { it.completedLevelsCount },
         ),
         AchievementDef(
             id = "grandmaster",
             title = "One-Line Grandmaster",
-            description = "Complete all 50 puzzle levels",
-            target = 50,
-            coinReward = 250,
+            description = "Complete all 100 puzzle levels",
+            target = 100,
+            coinReward = 350,
             progressSelector = { it.completedLevelsCount },
         ),
         AchievementDef(
@@ -54,9 +54,9 @@ object Achievements {
         AchievementDef(
             id = "star_collector",
             title = "Constellation",
-            description = "Collect 75 total stars across levels",
-            target = 75,
-            coinReward = 100,
+            description = "Collect 150 total stars across levels",
+            target = 150,
+            coinReward = 150,
             progressSelector = { it.totalStars },
         ),
         AchievementDef(

@@ -78,9 +78,13 @@ fun HomeScreen(
     onOpenHowToPlay: () -> Unit,
 ) {
     val strings = LocalAppStrings.current
-    val currentLevelId = progress.highestUnlockedLevel.coerceIn(1, 50)
+    val currentLevelId = progress.highestUnlockedLevel.coerceIn(1, 100)
     val currentLevel = remember(currentLevelId) { LevelCatalog.getLevel(currentLevelId) }
     val todayKey = remember { GameViewModel.todayDateKey() }
+    val yesterdayKey = remember { GameViewModel.yesterdayDateKey() }
+    val liveDailyStreak = remember(progress.completedDailyDates, todayKey, yesterdayKey) {
+        progress.currentDailyStreak(todayKey, yesterdayKey)
+    }
     val isDailyDoneToday = progress.completedDailyDates.contains(todayKey)
 
     NeonGridBackground {
@@ -110,7 +114,7 @@ fun HomeScreen(
                         color = TextPrimary,
                     )
                     Text(
-                        text = "${progress.completedLevelsCount}/50 ${strings.levelsCompletedLabel} • ${progress.totalStars} ★",
+                        text = "${progress.completedLevelsCount}/100 ${strings.levelsCompletedLabel} • ${progress.totalStars} ★",
                         style = MaterialTheme.typography.labelMedium,
                         color = NeonCyan,
                     )
@@ -282,7 +286,7 @@ fun HomeScreen(
                         }
                     }
 
-                    if (progress.dailyStreak > 0) {
+                    if (liveDailyStreak > 0) {
                         Surface(
                             shape = RoundedCornerShape(50),
                             color = NeonAmber.copy(alpha = 0.16f),
@@ -300,7 +304,7 @@ fun HomeScreen(
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = "${progress.dailyStreak}",
+                                    text = "$liveDailyStreak",
                                     style = MaterialTheme.typography.labelLarge,
                                     color = NeonAmber,
                                 )
@@ -325,10 +329,10 @@ fun HomeScreen(
                 ) {
                     HomeTileCard(
                         title = strings.levelSelect,
-                        subtitle = "${progress.completedLevelsCount} / 50",
+                        subtitle = "${progress.completedLevelsCount} / 100",
                         icon = Icons.Rounded.GridView,
                         accent = NeonCyan,
-                        progressFraction = progress.completedLevelsCount / 50f,
+                        progressFraction = progress.completedLevelsCount / 100f,
                         onClick = onOpenLevels,
                         modifier = Modifier
                             .weight(1f)
@@ -336,10 +340,10 @@ fun HomeScreen(
                     )
                     HomeTileCard(
                         title = strings.statistics,
-                        subtitle = "${progress.totalStars} / 150 ★",
+                        subtitle = "${progress.totalStars} / 300 ★",
                         icon = Icons.Rounded.BarChart,
                         accent = NeonAmber,
-                        progressFraction = progress.totalStars / 150f,
+                        progressFraction = progress.totalStars / 300f,
                         onClick = onOpenStats,
                         modifier = Modifier
                             .weight(1f)
@@ -446,5 +450,10 @@ fun tierTitle(tier: DifficultyTier, strings: com.example.i18n.AppStrings): Strin
     DifficultyTier.GEOMETRY -> strings.tierGeometry
     DifficultyTier.OVERLAPS -> strings.tierOverlaps
     DifficultyTier.MASTERMIND -> strings.tierMastermind
+    DifficultyTier.ICONIC -> strings.tierIconic
+    DifficultyTier.ARTIFACTS -> strings.tierArtifacts
+    DifficultyTier.NATURE -> strings.tierNature
+    DifficultyTier.WONDER -> strings.tierWonder
+    DifficultyTier.SACRED -> strings.tierSacred
     DifficultyTier.DAILY -> strings.tierDaily
 }

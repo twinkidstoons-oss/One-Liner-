@@ -481,7 +481,7 @@ fun NeonPuzzleCanvas(
             val activePos = currentVertexId?.let { posOf(it) }
             val cursor = pointerPos
             var magneticSnapVertexId: Int? = null
-            if (status == PuzzleStatus.DRAWING && activePos != null && cursor != null && currentVertexId != null) {
+            if (status == PuzzleStatus.DRAWING && activePos != null && cursor != null) {
                 val validNext = EulerSolver.validNextVertices(level, currentVertexId, drawnEdgeIds)
                 val snapPreviewRadius = boardSize * 0.145f
                 var nearestValidDist = Float.MAX_VALUE
@@ -672,18 +672,91 @@ private fun DrawScope.drawHintBadges(
     nodeRadius: Float,
     textMeasurer: TextMeasurer,
 ) {
-    val shownCount = (revealedSteps + 1).coerceAtMost(hintPath.size)
-    val firstVisitStep = LinkedHashMap<Int, Int>()
-    for (stepIdx in 0 until shownCount) {
-        val vId = hintPath[stepIdx]
-        if (!firstVisitStep.containsKey(vId)) {
-            firstVisitStep[vId] = stepIdx + 1
+    if (hintPath.size < 2 || revealedSteps <= 0) return
+    val steps = revealedSteps.coerceAtMost(hintPath.size - 1)
+
+    // 1. Highlight the starting vertex with a clear "START" pill above the node
+    val startCenter = posOf(hintPath[0])
+    drawCircle(
+        color = NeonAmber.copy(alpha = 0.85f),
+        radius = nodeRadius * 1.45f,
+        center = startCenter,
+        style = Stroke(width = 3.5f),
+    )
+    val startMeasured = textMeasurer.measure(
+        text = "START",
+        style = TextStyle(
+            color = NavyDeepest,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.ExtraBold,
+        ),
+    )
+    val pillW = startMeasured.size.width + 14f
+    val pillH = startMeasured.size.height + 6f
+    val pillTop = (startCenter.y - nodeRadius * 1.65f - pillH).coerceAtLeast(4f)
+    val pillLeft = (startCenter.x - pillW / 2f).coerceIn(4f, (size.width - pillW - 4f).coerceAtLeast(4f))
+    drawRoundRect(
+        color = NeonAmber,
+        topLeft = Offset(pillLeft, pillTop),
+        size = androidx.compose.ui.geometry.Size(pillW, pillH),
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius(pillH / 2f, pillH / 2f),
+    )
+    drawRoundRect(
+        color = NavyDeepest,
+        topLeft = Offset(pillLeft, pillTop),
+        size = androidx.compose.ui.geometry.Size(pillW, pillH),
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius(pillH / 2f, pillH / 2f),
+        style = Stroke(width = 2f),
+    )
+    drawText(
+        textLayoutResult = startMeasured,
+        topLeft = Offset(
+            pillLeft + (pillW - startMeasured.size.width) / 2f,
+            pillTop + (pillH - startMeasured.size.height) / 2f,
+        ),
+    )
+
+    // 2. Draw strictly sequential step-by-step numbers (1, 2, 3, ..., N) on each revealed edge + arrow
+    val placedCenters = mutableListOf<Offset>()
+    val badgeRadius = (nodeRadius * 0.78f).coerceIn(13f, 19f)
+
+    for (i in 0 until steps) {
+        val a = posOf(hintPath[i])
+        val b = posOf(hintPath[i + 1])
+        val dx = b.x - a.x
+        val dy = b.y - a.y
+        val len = hypot(dx, dy).coerceAtLeast(1f)
+        val ux = dx / len
+        val uy = dy / len
+        // Unit normal perpendicular to edge
+        val nx = -uy
+        val ny = ux
+
+        // Directional arrowhead around 70% along edge
+        val tipT = if (len > nodeRadius * 4f) 0.72f else 0.65f
+        val tip = Offset(a.x + dx * tipT, a.y + dy * tipT)
+        val arrowLen = (nodeRadius * 0.55f).coerceIn(8f, 13f)
+        val arrowWing = arrowLen * 0.65f
+        val baseCenter = Offset(tip.x - ux * arrowLen, tip.y - uy * arrowLen)
+        val arrowPath = Path().apply {
+            moveTo(tip.x, tip.y)
+            lineTo(baseCenter.x + nx * arrowWing, baseCenter.y + ny * arrowWing)
+            lineTo(baseCenter.x - nx * arrowWing, baseCenter.y - ny * arrowWing)
+            close()
         }
-    }
-    for ((vId, stepNum) in firstVisitStep) {
-        val center = posOf(vId)
-        val badgeCenter = Offset(center.x + nodeRadius * 0.95f, center.y - nodeRadius * 0.95f)
-        val badgeRadius = (nodeRadius * 0.72f).coerceAtLeast(13f)
+        drawPath(path = arrowPath, color = NeonAmber)
+
+        // Sequential edge step number badge at ~44% along edge (nudge perpendicularly if close to an existing badge)
+        var badgeCenter = Offset(a.x + dx * 0.44f, a.y + dy * 0.44f)
+        if (placedCenters.any { hypot(it.x - badgeCenter.x, it.y - badgeCenter.y) < badgeRadius * 2.1f }) {
+            val cand1 = Offset(badgeCenter.x + nx * badgeRadius * 1.4f, badgeCenter.y + ny * badgeRadius * 1.4f)
+            val cand2 = Offset(badgeCenter.x - nx * badgeRadius * 1.4f, badgeCenter.y - ny * badgeRadius * 1.4f)
+            val d1 = placedCenters.minOfOrNull { hypot(it.x - cand1.x, it.y - cand1.y) } ?: Float.MAX_VALUE
+            val d2 = placedCenters.minOfOrNull { hypot(it.x - cand2.x, it.y - cand2.y) } ?: Float.MAX_VALUE
+            badgeCenter = if (d1 >= d2) cand1 else cand2
+        }
+        placedCenters.add(badgeCenter)
+
         drawCircle(
             color = NeonAmber,
             radius = badgeRadius,
@@ -693,14 +766,14 @@ private fun DrawScope.drawHintBadges(
             color = NavyDeepest,
             radius = badgeRadius,
             center = badgeCenter,
-            style = Stroke(width = 2f),
+            style = Stroke(width = 2.2f),
         )
-        val label = stepNum.toString()
+        val label = (i + 1).toString()
         val measured = textMeasurer.measure(
             text = label,
             style = TextStyle(
                 color = NavyDeepest,
-                fontSize = 11.sp,
+                fontSize = if (label.length >= 2) 10.sp else 11.sp,
                 fontWeight = FontWeight.ExtraBold,
             ),
         )

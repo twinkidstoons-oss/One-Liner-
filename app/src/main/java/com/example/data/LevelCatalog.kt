@@ -42,7 +42,7 @@ object LevelCatalog {
     private fun cycleEdges(offset: Int, count: Int): List<Pair<Int, Int>> =
         (0 until count).map { i -> (offset + i) to (offset + (i + 1) % count) }
 
-    val levels: List<PuzzleLevel> by lazy { createAll50Levels() }
+    val levels: List<PuzzleLevel> by lazy { createAll50Levels() + Levels51To100.levels }
 
     fun getLevel(id: Int): PuzzleLevel = levels.firstOrNull { it.id == id } ?: levels.first()
 

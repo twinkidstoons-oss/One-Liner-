@@ -268,7 +268,7 @@ fun OnboardingScreen(
                             ) {
                                 Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = NeonEmerald)
                                 Text(
-                                    text = "50 Handcrafted Levels + Daily Mode",
+                                    text = "100 Handcrafted Levels + Daily Mode",
                                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                                     color = NeonEmerald,
                                 )

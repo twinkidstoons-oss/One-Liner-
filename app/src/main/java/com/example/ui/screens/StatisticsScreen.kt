@@ -31,16 +31,19 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.data.Achievements
 import com.example.data.GameProgress
 import com.example.i18n.LocalAppStrings
+import com.example.ui.GameViewModel
 import com.example.ui.components.CoinPill
 import com.example.ui.components.GlassCard
 import com.example.ui.components.NeonGridBackground
@@ -61,6 +64,11 @@ fun StatisticsScreen(
 ) {
     BackHandler(onBack = onBack)
     val strings = LocalAppStrings.current
+    val todayKey = remember { GameViewModel.todayDateKey() }
+    val yesterdayKey = remember { GameViewModel.yesterdayDateKey() }
+    val liveStreak = remember(progress.completedDailyDates, todayKey, yesterdayKey) {
+        progress.currentDailyStreak(todayKey, yesterdayKey)
+    }
 
     NeonGridBackground {
         Column(
@@ -89,14 +97,14 @@ fun StatisticsScreen(
                 ) {
                     SummaryStatCard(
                         title = strings.levelsCompletedLabel,
-                        value = "${progress.completedLevelsCount} / 50",
+                        value = "${progress.completedLevelsCount} / 100",
                         icon = Icons.Rounded.CheckCircle,
                         accent = NeonEmerald,
                         modifier = Modifier.weight(1f),
                     )
                     SummaryStatCard(
                         title = strings.starsLabel,
-                        value = "${progress.totalStars} / 150",
+                        value = "${progress.totalStars} / 300",
                         icon = Icons.Rounded.Star,
                         accent = NeonAmber,
                         modifier = Modifier.weight(1f),
@@ -109,7 +117,7 @@ fun StatisticsScreen(
                 ) {
                     SummaryStatCard(
                         title = strings.bestStreak,
-                        value = "${progress.dailyStreak} d",
+                        value = "$liveStreak d",
                         icon = Icons.Rounded.LocalFireDepartment,
                         accent = NeonCyan,
                         modifier = Modifier.weight(1f),

@@ -303,7 +303,7 @@ fun GameplayScreen(
                 PuzzleStatus.COMPLETE -> LevelCompleteOverlay(
                     isDaily = state.level.isDailyChallenge,
                     levelNumber = state.level.id,
-                    hasNextLevel = !state.level.isDailyChallenge && state.level.id < 50,
+                    hasNextLevel = !state.level.isDailyChallenge && state.level.id < 100,
                     result = state.completionResult,
                     onNextLevel = { onNextLevel(state.level.id + 1) },
                     onReplay = onRestart,

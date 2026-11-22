@@ -242,40 +242,71 @@ class SoundEngine(context: Context) {
 
                 track.play()
 
-                // Ambient chord progression: Am9 -> Fmaj7 -> Cmaj9 -> G6
-                val chords = arrayOf(
-                    doubleArrayOf(220.0, 261.63, 329.63, 493.88),
-                    doubleArrayOf(174.61, 220.0, 261.63, 329.63),
-                    doubleArrayOf(196.0, 261.63, 329.63, 392.00),
-                    doubleArrayOf(196.0, 246.94, 293.66, 329.63),
+                // Warm lo-fi ambient puzzle soundtrack:
+                // 4-bar relaxing progression: Fmaj7 -> G6 -> Em7 -> Am9 (gentle warm bass + soft plucked pentatonic melody)
+                val padChords = arrayOf(
+                    doubleArrayOf(174.61, 220.00, 261.63), // F3, A3, C4
+                    doubleArrayOf(196.00, 246.94, 293.66), // G3, B3, D4
+                    doubleArrayOf(164.81, 196.00, 246.94), // E3, G3, B3
+                    doubleArrayOf(146.83, 220.00, 261.63), // D3/A3/C4 warm suspension
                 )
-                val chunkSamples = sampleRate / 5 // 200ms chunks for responsive volume/stop
+                val bassNotes = doubleArrayOf(87.31, 98.00, 82.41, 110.00) // F2, G2, E2, A2
+                val melodyBars = arrayOf(
+                    doubleArrayOf(349.23, 440.00, 523.25, 440.00, 392.00, 523.25, 440.00, 349.23),
+                    doubleArrayOf(392.00, 493.88, 587.33, 493.88, 440.00, 587.33, 493.88, 392.00),
+                    doubleArrayOf(329.63, 392.00, 493.88, 392.00, 329.63, 493.88, 587.33, 493.88),
+                    doubleArrayOf(329.63, 440.00, 523.25, 440.00, 392.00, 523.25, 440.00, 329.63),
+                )
+
+                val chunkSamples = sampleRate / 10 // 100ms chunks for responsive volume/stop
                 val buffer = ShortArray(chunkSamples)
                 var globalSample = 0L
-                val samplesPerChord = sampleRate * 3L // 3 seconds per chord
+                val samplesPerStep = (sampleRate * 0.45).toLong() // Relaxed gentle pulse (~133ms -> 450ms per pluck, 3.6s per bar)
+                val stepsPerBar = 8
+                val samplesPerBar = samplesPerStep * stepsPerBar
 
                 while (isActive && musicEnabled && isAppForeground) {
                     val vol = musicVolume
                     for (i in 0 until chunkSamples) {
                         val sIdx = globalSample + i
-                        val chordIdx = ((sIdx / samplesPerChord) % chords.size).toInt()
-                        val localT = (sIdx % samplesPerChord).toDouble() / samplesPerChord
-                        // Smooth crossfade envelope per chord
-                        val fade = when {
-                            localT < 0.15 -> localT / 0.15
-                            localT > 0.85 -> (1.0 - localT) / 0.15
+                        val barIdx = ((sIdx / samplesPerBar) % padChords.size).toInt()
+                        val barLocalSample = sIdx % samplesPerBar
+                        val barFrac = barLocalSample.toDouble() / samplesPerBar
+
+                        val stepIdx = ((barLocalSample / samplesPerStep) % stepsPerBar).toInt()
+                        val noteT = (barLocalSample % samplesPerStep).toDouble() / sampleRate
+
+                        // Smooth bar envelope to prevent clicks between chords
+                        val barFade = when {
+                            barFrac < 0.08 -> barFrac / 0.08
+                            barFrac > 0.90 -> (1.0 - barFrac) / 0.10
                             else -> 1.0
                         }
+
                         val tSec = sIdx.toDouble() / sampleRate
-                        val chord = chords[chordIdx]
-                        var sampleVal = 0.0
-                        for (f in chord) {
-                            sampleVal += sin(2.0 * PI * f * tSec)
+
+                        // 1. Warm subtle sub-bass anchor
+                        val bass = sin(2.0 * PI * bassNotes[barIdx] * tSec) * 0.34
+
+                        // 2. Soft low-mid warm pad (sin only, gentle amplitude, slow breathing LFO)
+                        val pad = padChords[barIdx]
+                        var padSum = 0.0
+                        for (f in pad) {
+                            padSum += sin(2.0 * PI * f * tSec)
                         }
-                        // Soft gentle shimmer overtone
-                        val shimmer = sin(2.0 * PI * chord.last() * 2.0 * tSec) * 0.15
-                        val combined = ((sampleVal / chord.size) + shimmer) * fade * 0.18 * vol
-                        buffer[i] = (combined * Short.MAX_VALUE)
+                        val breath = 0.80 + 0.20 * sin(2.0 * PI * 0.22 * tSec)
+                        val padSignal = (padSum / pad.size) * 0.28 * barFade * breath
+
+                        // 3. Soft kalimba/harp-like plucked pentatonic note (warm fundamental + tiny soft octave transient)
+                        val melodyFreq = melodyBars[barIdx][stepIdx]
+                        val pluckEnv = (1.0 - exp(-90.0 * noteT)) * exp(-4.8 * noteT)
+                        val pluckTone = (
+                            sin(2.0 * PI * melodyFreq * tSec) * 0.82 +
+                                sin(2.0 * PI * melodyFreq * 2.0 * tSec) * 0.18 * exp(-9.0 * noteT)
+                            ) * pluckEnv * 0.26
+
+                        val mixed = (bass * barFade + padSignal + pluckTone) * 0.24 * vol
+                        buffer[i] = (mixed * Short.MAX_VALUE)
                             .toInt()
                             .coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
                             .toShort()

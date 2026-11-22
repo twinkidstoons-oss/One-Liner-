@@ -453,7 +453,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
             soundEngine.playCoinReward()
-            val increment = maxOf(4, maxSteps / 2 + 1)
+            val increment = 4
             val nextSteps = (state.revealedHintSteps + increment).coerceAtMost(maxSteps)
             _puzzleState.update {
                 it.copy(
